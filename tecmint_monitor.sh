@@ -9,6 +9,11 @@
 #! /bin/bash
 # unset any variable which system may be using
 
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  echo "Mac OS X is not supported at this time"
+  exit 1
+fi
+
 # clear the screen
 clear
 
