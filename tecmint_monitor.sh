@@ -76,13 +76,18 @@ if [[ $# -eq 0 ]]; then
     		VERSION=`cat $1 | tr "\n" ' ' | sed s/.*VERSION.*=\ // `
 	}
 	# Check OS
-	if [ "${OS}" = "SunOS" ] ; then
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+		OS='MacOS X'
+		ARCH=`uname -p`
+		OSSTR="${OS} ${REV}(${ARCH} `uname -v`)"
+	elif [ "${OS}" = "SunOS" ] ; then
 		OS=Solaris
 		ARCH=`uname -p`
 		OSSTR="${OS} ${REV}(${ARCH} `uname -v`)"
 	elif [ "${OS}" = "AIX" ] ; then
 		OSSTR="${OS} `oslevel` (`oslevel -r`)"
 	elif [ "${OS}" = "Linux" ] ; then
+    OS=$(uname -o)
 		KERNEL=`uname -r`
 		if [ -f /etc/redhat-release ] ; then
 			DIST='RedHat'
@@ -98,16 +103,15 @@ if [[ $# -eq 0 ]]; then
 		elif [ -f /etc/debian_version ] ; then
 			DIST="Debian `cat /etc/debian_version`"
 			REV=""
-
+    fi
 	fi
+
 	if [ -f /etc/UnitedLinux-release ] ; then
         	DIST="${DIST}[`cat /etc/UnitedLinux-release | tr "\n" ' ' | sed s/VERSION.*//`]"
 	fi
 
 	OSSTR="${OS} ${DIST} ${REV}(${PSUEDONAME} ${KERNEL} ${MACH})"
-	OS=$(uname -o)
 
-	fi
 	# Check OS Type
 	echo -e '\E[32m'"Operating System Type :" $tecreset ${OS}
 	echo -e '\E[32m'"OS Name :" $tecreset $OSSTR
@@ -124,10 +128,6 @@ if [[ $# -eq 0 ]]; then
 	# Check hostname
 	echo -e '\E[32m'"Hostname :" $tecreset $HOSTNAME
 
-	# Check Internal IP
-	internalip=$(hostname -i)
-	echo -e '\E[32m'"Internal IP :" $tecreset $internalip
-
 	# Check External IP
 	externalip=$(curl -s ipecho.net/plain;echo)
 	echo -e '\E[32m'"External IP : $tecreset "$externalip
@@ -140,20 +140,34 @@ if [[ $# -eq 0 ]]; then
 	who>/tmp/who
 	echo -e '\E[32m'"Logged In users :" $tecreset && cat /tmp/who 
 
-	# Check RAM and SWAP Usages
-	free -m | grep -v + > /tmp/ramcache
-	echo -e '\E[32m'"Ram Usages :" $tecreset
-	cat /tmp/ramcache | grep -v "Swap"
-	echo -e '\E[32m'"Swap Usages :" $tecreset
-	cat /tmp/ramcache | grep -v "Mem" 
+  if [[ "$OSTYPE" != "darwin"* ]]; then
+    # Check Internal IP
+    internalip=$(hostname -i)
+    echo -e '\E[32m'"Internal IP :" $tecreset $internalip
+
+    # Check RAM and SWAP Usages
+    free -m | grep -v + > /tmp/ramcache
+    echo -e '\E[32m'"Ram Usages :" $tecreset
+    cat /tmp/ramcache | grep -v "Swap"
+    echo -e '\E[32m'"Swap Usages :" $tecreset
+    cat /tmp/ramcache | grep -v "Mem" 
+  fi
 
 	# Check Disk Usages
-	df -h| grep 'Filesystem\|/dev/sda*' > /tmp/diskusage
-	echo -e '\E[32m'"Disk Usages :" $tecreset 
-	cat /tmp/diskusage
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    df -h| grep 'Filesystem\|/dev/disk*' > /tmp/diskusage
+  else
+    df -h| grep 'Filesystem\|/dev/sda*' > /tmp/diskusage
+    echo -e '\E[32m'"Disk Usages :" $tecreset 
+    cat /tmp/diskusage
+  fi
 
 	# Check Load Average, get data from /proc . This might not work outsude Linux.
-	loadaverage=$(cat /proc/loadavg |  awk '{printf("%s %s %s",$1,$2,$3)}')
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    loadaverage=$(uptime |  uptime | awk '{print $10 $11 $12}')
+  else
+    loadaverage=$(cat /proc/loadavg |  awk '{printf("%s %s %s",$1,$2,$3)}')
+  fi
 	echo -e '\E[32m'"Load Average :" $tecreset $loadaverage
 
 	# Check System Uptime
