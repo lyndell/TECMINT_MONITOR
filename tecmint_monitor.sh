@@ -17,11 +17,10 @@ unset os architecture kernelrelease internalip externalip nameserver loadaverage
 command -v curl > /dev/null || ( echo "CURL not availiable or not installed, fix prior running"; exit 1 )
 
 #
-# MacOs not yet supported. 
+# macOS compatibility: allow the script to run with reduced functionality.
 #
-if [ "$(uname -s)" = "darwin" ]; then
-  echo "Mac OS X is not supported at this time"
-  exit 1
+if [ "$(uname -s | tr '[:upper:]' '[:lower:]')" = "darwin" ]; then
+  echo "Running with limited macOS compatibility"
 fi
 
 #
@@ -65,6 +64,10 @@ green="\E[32m"
 greenBold="\E[33;1m"
 red="\E[31m"
 colorReset="\E[0m"
+tmpdir="${TMPDIR:-/tmp}"
+who_file="$tmpdir/who.$$"
+ram_file="$tmpdir/ramcache.$$"
+disk_file="$tmpdir/diskusage.$$"
 if [ "$#" -eq 0 ]; then
 
 	#
@@ -146,11 +149,20 @@ if [ "$#" -eq 0 ]; then
         fi
 
 	# Check hostname
-	hostnamev=$(hostname -f)
+	hostnamev=$(hostname -f 2>/dev/null || hostname 2>/dev/null || uname -n 2>/dev/null || echo "unknown")
 	printf "%b Hostname : %b %s\n" "$green" "$colorReset" "$hostnamev"
 
 	# Check Internal IP
-	internalip=$(hostname -i)
+	internalip=$(hostname -i 2>/dev/null | head -n 1)
+	if [ -z "$internalip" ]; then
+		internalip=$(hostname -I 2>/dev/null | awk '{print $1}')
+	fi
+	if [ -z "$internalip" ]; then
+		internalip=$(ifconfig 2>/dev/null | awk '/inet / && $2 !~ /^127\./ {print $2; exit}')
+	fi
+	if [ -z "$internalip" ]; then
+		internalip=$(ipconfig getifaddr en0 2>/dev/null || true)
+	fi
 	printf "%b Internal IP : %b %s\n" "$green" "$colorReset" "$internalip"
 
 	# Check External IP
@@ -162,23 +174,28 @@ if [ "$#" -eq 0 ]; then
 	printf "%b Name Servers : %b %s\n" "$green" "$colorReset" "$nameservers"
 
 	# Check Logged In Users
-	who>/tmp/who
-	printf "%b Logged In users : %b\n" "$greenBold" "$colorReset" && cat /tmp/who  
+	who > "$who_file"
+	printf "%b Logged In users : %b\n" "$greenBold" "$colorReset" && cat "$who_file"
 
 
 	printf "%b RAM and SWAP Usage : %b\n" "$greenBold" "$colorReset"
 
 	# Check RAM and SWAP Usages
-	free -m | grep -v + > /tmp/ramcache
-	printf "%b Ram Usages :%b\n" "$green" "$colorReset"
-	grep -v "Swap" /tmp/ramcache
-	printf "%b Swap Usages : %b\n" "$green" "$colorReset"
-	grep -v "Mem"  /tmp/ramcache
+	if command -v free >/dev/null 2>&1; then
+		free -m | grep -v + > "$ram_file"
+		printf "%b Ram Usages :%b\n" "$green" "$colorReset"
+		grep -v "Swap" "$ram_file"
+		printf "%b Swap Usages : %b\n" "$green" "$colorReset"
+		grep -v "Mem"  "$ram_file"
+	else
+		printf "%b Ram Usages : %b unavailable on this platform\n" "$green" "$colorReset"
+		printf "%b Swap Usages : %b unavailable on this platform\n" "$green" "$colorReset"
+	fi
 
 	# Check Disk Usages
 	printf "%b Disk Usage : %b\n" "$greenBold" "$colorReset"
-	df -h| grep 'Filesystem\|/dev/sda*' > /tmp/diskusage
-	cat /tmp/diskusage
+	df -h | grep 'Filesystem\|/dev/sda*' > "$disk_file"
+	cat "$disk_file"
 
 
 	printf "%b Load Average and Uptime : %b\n" "$greenBold" "$colorReset"
@@ -194,7 +211,7 @@ if [ "$#" -eq 0 ]; then
 	unset tecreset os architecture kernelrelease internalip externalip nameserver loadaverage green greenBold red colorReset
 
 	# Remove Temporary Files
-	temp_files="/tmp/osrelease /tmp/who /tmp/ramcache /tmp/diskusage"
+	temp_files="$who_file $ram_file $disk_file"
 	for i in ${temp_files}; do 
 		# check if file exists prior removing.
 		if [ -f "${i}" ]; then
